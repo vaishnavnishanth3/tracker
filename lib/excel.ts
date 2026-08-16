@@ -12,7 +12,13 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
         await workbook.xlsx.readFile(FILE);
         // After reading from disk, ExcelJS doesn't preserve the `columns` metadata (keys/headers).
         // Restore column definitions from the first/header row for known sheets so addRow(obj) works.
-        const sheetNames = ["investments", "checklist", "expenses", "balances", "payslips"];
+        const sheetNames = [
+            "investments",
+            "checklist",
+            "expenses",
+            "balances",
+            "payslips",
+        ];
         sheetNames.forEach((name) => {
             const sheet = workbook.getWorksheet(name);
             if (!sheet) return;
@@ -35,6 +41,7 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
         { header: "name", key: "name" },
         { header: "type", key: "type" },
         { header: "startDate", key: "startDate" },
+        { header: "endDate", key: "endDate" },
         { header: "amount", key: "amount" },
         { header: "termYears", key: "termYears" },
         { header: "notes", key: "notes" },
@@ -119,21 +126,31 @@ export async function updateRow(
     const wb = await ensureWorkbook();
     const sheet = wb.getWorksheet(name);
     if (!sheet) throw new Error("Sheet not found");
+
     const idCol = sheet.getColumn("id");
+    if (!idCol || typeof idCol.number !== "number") {
+        return false;
+    }
+
     let found = false;
     sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
+
         const cell = row.getCell(idCol.number);
         if (String(cell.value) === String(id)) {
             found = true;
             Object.keys(updates).forEach((k) => {
                 const col = sheet.getColumn(k);
-                if (col && col.number)
+                if (col && typeof col.number === "number") {
                     row.getCell(col.number).value = updates[k];
+                }
             });
         }
     });
-    if (found) await wb.xlsx.writeFile(FILE);
+
+    if (found) {
+        await wb.xlsx.writeFile(FILE);
+    }
     return found;
 }
 

@@ -15,6 +15,7 @@ type Inv = {
     name: string;
     type: string;
     startDate?: string;
+    endDate?: string;
     amount?: string;
 };
 
@@ -24,6 +25,7 @@ export default function Investments(): JSX.Element {
         name: "",
         type: "SIP",
         startDate: "",
+        endDate: "",
         amount: "",
     });
 
@@ -81,6 +83,15 @@ export default function Investments(): JSX.Element {
                     required
                 />
                 <TextField
+                    type='date'
+                    label='End'
+                    InputLabelProps={{ shrink: true }}
+                    value={form.endDate}
+                    onChange={(e) =>
+                        setForm({ ...form, endDate: e.target.value })
+                    }
+                />
+                <TextField
                     type='number'
                     label='Amount'
                     value={form.amount}
@@ -104,6 +115,7 @@ export default function Investments(): JSX.Element {
                         <TableCell>Name</TableCell>
                         <TableCell>Type</TableCell>
                         <TableCell>Start</TableCell>
+                        <TableCell>End</TableCell>
                         <TableCell>Amount</TableCell>
                     </TableRow>
                 </TableHead>
@@ -114,6 +126,7 @@ export default function Investments(): JSX.Element {
                             <TableCell>{it.name}</TableCell>
                             <TableCell>{it.type}</TableCell>
                             <TableCell>{it.startDate}</TableCell>
+                            <TableCell>{it.endDate || "-"}</TableCell>
                             <TableCell>{it.amount}</TableCell>
                         </TableRow>
                     ))}

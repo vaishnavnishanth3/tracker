@@ -39,46 +39,76 @@ const shortcuts = [
 export default function Home(): JSX.Element {
     return (
         <Box sx={{ py: 2 }}>
-            <Typography variant='h3' gutterBottom>
-                Welcome to your financial dashboard
-            </Typography>
-            <Typography
-                variant='body1'
-                sx={{ color: "text.secondary", maxWidth: 700, mb: 4 }}
+            <Box
+                sx={{
+                    background:
+                        "linear-gradient(135deg, rgba(99,102,241,0.22), rgba(15,23,42,0.94)), #0f172a",
+                    border: "1px solid rgba(148, 163, 184, 0.2)",
+                    borderRadius: 4,
+                    p: { xs: 3, md: 4 },
+                    mb: 4,
+                }}
             >
-                Keep a clean view of investments, monthly expenses, payroll, and
-                progress across the year from one place.
-            </Typography>
+                <Typography variant='h3' gutterBottom sx={{ color: "#f8fafc" }}>
+                    Welcome to your financial dashboard
+                </Typography>
+                <Typography
+                    variant='body1'
+                    sx={{ color: "#cbd5e1", maxWidth: 700 }}
+                >
+                    Keep a clean view of investments, monthly expenses, payroll,
+                    and progress across the year from one place.
+                </Typography>
+            </Box>
 
-            <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={2}
-                sx={{ flexWrap: "wrap", mb: 4 }}
+            <Box
+                sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                        xs: "1fr 1fr",
+                        sm: "repeat(2, minmax(0, 1fr))",
+                        md: "repeat(3, minmax(0, 1fr))",
+                    },
+                    gap: 2,
+                    mb: 4,
+                }}
             >
                 {shortcuts.map((item) => (
                     <Card
                         key={item.href}
                         sx={{
-                            minWidth: { xs: "100%", sm: 220, md: 240 },
-                            flex: 1,
                             bgcolor: "#ffffff",
                             color: "#0f172a",
+                            transition:
+                                "transform 0.2s ease, box-shadow 0.2s ease",
+                            boxShadow: "0 18px 38px rgba(15, 23, 42, 0.12)",
+                            height: "100%",
+                            "&:hover": {
+                                transform: "translateY(-2px)",
+                                boxShadow: "0 20px 42px rgba(15, 23, 42, 0.18)",
+                            },
                         }}
                     >
                         <CardActionArea component={Link} href={item.href}>
-                            <CardContent>
+                            <CardContent sx={{ p: 3 }}>
                                 <Typography variant='h6' gutterBottom>
                                     {item.title}
                                 </Typography>
                                 <Typography
                                     variant='body2'
-                                    sx={{ color: "#475569" }}
+                                    sx={{ color: "#475569", mb: 2 }}
                                 >
                                     {item.description}
                                 </Typography>
                                 <Button
-                                    sx={{ mt: 2, color: "#0f172a" }}
-                                    variant='text'
+                                    variant='contained'
+                                    sx={{
+                                        bgcolor: "#0f172a",
+                                        color: "#ffffff",
+                                        borderRadius: 999,
+                                        px: 2,
+                                        "&:hover": { bgcolor: "#1e293b" },
+                                    }}
                                 >
                                     Open
                                 </Button>
@@ -86,11 +116,11 @@ export default function Home(): JSX.Element {
                         </CardActionArea>
                     </Card>
                 ))}
-            </Stack>
+            </Box>
 
             <Box
                 sx={{
-                    bgcolor: "background.paper",
+                    bgcolor: "#ffffff",
                     color: "#0f172a",
                     borderRadius: 3,
                     p: 3,

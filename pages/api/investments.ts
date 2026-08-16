@@ -17,6 +17,7 @@ export default async function handler(
             name: body.name,
             type: body.type,
             startDate: body.startDate,
+            endDate: body.endDate || "",
             amount: body.amount,
             termYears: body.termYears || "",
             notes: body.notes || "",
