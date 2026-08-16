@@ -1,0 +1,154 @@
+:root {
+    --accent: #6366f1;
+    --muted: #94a3b8;
+    --card-bg: rgba(255, 255, 255, 0.03);
+}
+
+body {
+    font-family: Inter, system-ui, Arial, sans-serif;
+    padding: 20px;
+    background: linear-gradient(180deg, #071030 0%, #071428 100%);
+    color: #e6eef8;
+}
+
+.topnav {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 18px;
+    align-items: center;
+}
+.topnav a {
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.card {
+    background: var(--card-bg);
+    padding: 12px;
+    border-radius: 10px;
+    margin: 8px 0;
+}
+input,
+select,
+button,
+textarea {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: transparent;
+    color: inherit;
+}
+button {
+    background: var(--accent);
+    border: none;
+    color: white;
+    cursor: pointer;
+}
+button:hover {
+    filter: brightness(1.03);
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    overflow: hidden;
+}
+td,
+th {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 10px;
+}
+form > div {
+    margin-bottom: 8px;
+}
+
+.timeline {
+    margin-top: 16px;
+}
+.timelineGrid {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.labelsHeader {
+    width: 220px;
+    font-weight: 600;
+    color: var(--muted);
+}
+.monthsHeader {
+    flex: 1;
+    display: flex;
+}
+.month {
+    box-sizing: border-box;
+    border-right: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 6px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+}
+.rows {
+    margin-top: 8px;
+}
+.row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.labels {
+    width: 220px;
+    color: #e6eef8;
+}
+.chart {
+    flex: 1;
+    position: relative;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.bar {
+    position: absolute;
+    top: 8px;
+    height: 28px;
+    background: linear-gradient(90deg, #60a5fa, #6366f1);
+    border-radius: 6px;
+    color: white;
+    padding-left: 8px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+}
+
+.payslip {
+    margin: 12px 0;
+}
+.payslipHeader {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.barWrap {
+    display: flex;
+    height: 28px;
+    width: 100%;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+}
+.barPart {
+    height: 100%;
+}
+.barDeductions {
+    height: 100%;
+    background: #ef4444;
+}
+.payslipNotes {
+    margin-top: 6px;
+    color: var(--muted);
+}

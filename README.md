@@ -11,6 +11,8 @@ cd tracker
 npm install
 ```
 
+Note: TypeScript dev dependencies are included — no extra steps required.
+
 2. Run dev server:
 
 ```powershell
