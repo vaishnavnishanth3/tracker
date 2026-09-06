@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { readSheet, appendRow } from "../../lib/excel";
+import { readSheet, appendRow, updateRow } from "../../lib/excel";
 
 export default async function handler(
     req: NextApiRequest,
@@ -25,7 +25,36 @@ export default async function handler(
             deductions,
             net,
             notes: b.notes || "",
+            expectedIncome:
+                b.expectedIncome === "" || b.expectedIncome === undefined
+                    ? ""
+                    : Number(b.expectedIncome),
         });
+        return res.json({ ok: true });
+    }
+    if (req.method === "PATCH") {
+        const b = req.body || {};
+        if (b.id === undefined || b.id === null || b.id === "") {
+            return res.status(400).json({ error: "Missing payslip id" });
+        }
+        const updates: Record<string, any> = {};
+        for (const k of [
+            "date",
+            "gross",
+            "basic",
+            "hra",
+            "allowances",
+            "deductions",
+            "net",
+            "notes",
+            "expectedIncome",
+        ]) {
+            if (k in b) updates[k] = b[k];
+        }
+        const found = await updateRow("payslips", String(b.id), updates);
+        if (!found) {
+            return res.status(404).json({ error: "Payslip not found" });
+        }
         return res.json({ ok: true });
     }
     res.status(405).end();

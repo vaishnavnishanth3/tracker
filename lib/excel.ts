@@ -32,6 +32,53 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
                 sheet.columns = headers.map((h) => ({ header: h, key: h }));
             }
         });
+        // Migration: older files predate the investments.compounding column.
+        let migrated = false;
+        const invSheet = workbook.getWorksheet("investments");
+        if (invSheet) {
+            const headerRow = invSheet.getRow(1);
+            const headers: string[] = [];
+            headerRow.eachCell({ includeEmpty: false }, (cell) => {
+                headers.push(String(cell.value));
+            });
+            for (const extra of [
+                "compounding",
+                "interestRate",
+                "customMaturityAmount",
+                "currentAmount",
+                "debitDay",
+                "paidMonths",
+            ]) {
+                if (headers.length > 0 && !headers.includes(extra)) {
+                    headerRow.getCell(headers.length + 1).value = extra;
+                    headers.push(extra);
+                    migrated = true;
+                }
+            }
+            if (migrated) {
+                invSheet.columns = headers.map((h) => ({ header: h, key: h }));
+            }
+        }
+        const paysSheet = workbook.getWorksheet("payslips");
+        if (paysSheet) {
+            const headerRow = paysSheet.getRow(1);
+            const headers: string[] = [];
+            headerRow.eachCell({ includeEmpty: false }, (cell) => {
+                headers.push(String(cell.value));
+            });
+            if (headers.length > 0 && !headers.includes("expectedIncome")) {
+                headerRow.getCell(headers.length + 1).value = "expectedIncome";
+                headers.push("expectedIncome");
+                paysSheet.columns = headers.map((h) => ({
+                    header: h,
+                    key: h,
+                }));
+                migrated = true;
+            }
+        }
+        if (migrated) {
+            await workbook.xlsx.writeFile(FILE);
+        }
         return workbook;
     }
 
@@ -45,6 +92,12 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
         { header: "amount", key: "amount" },
         { header: "termYears", key: "termYears" },
         { header: "notes", key: "notes" },
+        { header: "compounding", key: "compounding" },
+        { header: "interestRate", key: "interestRate" },
+        { header: "customMaturityAmount", key: "customMaturityAmount" },
+        { header: "currentAmount", key: "currentAmount" },
+        { header: "debitDay", key: "debitDay" },
+        { header: "paidMonths", key: "paidMonths" },
     ];
 
     const chk = workbook.addWorksheet("checklist");
@@ -84,6 +137,7 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
         { header: "deductions", key: "deductions" },
         { header: "net", key: "net" },
         { header: "notes", key: "notes" },
+        { header: "expectedIncome", key: "expectedIncome" },
     ];
 
     await workbook.xlsx.writeFile(FILE);
@@ -152,6 +206,39 @@ export async function updateRow(
         await wb.xlsx.writeFile(FILE);
     }
     return found;
+}
+
+export async function deleteRow(
+    name: string,
+    id: string | number,
+): Promise<boolean> {
+    const wb = await ensureWorkbook();
+    const sheet = wb.getWorksheet(name);
+    if (!sheet) throw new Error("Sheet not found");
+
+    const idCol = sheet.getColumn("id");
+    if (!idCol || typeof idCol.number !== "number") {
+        return false;
+    }
+
+    const toDelete: number[] = [];
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const cell = row.getCell(idCol.number);
+        if (String(cell.value) === String(id)) {
+            toDelete.push(rowNumber);
+        }
+    });
+
+    // Splice bottom-up so row numbers stay valid.
+    toDelete.reverse().forEach((rowNumber) => {
+        sheet.spliceRows(rowNumber, 1);
+    });
+
+    if (toDelete.length > 0) {
+        await wb.xlsx.writeFile(FILE);
+    }
+    return toDelete.length > 0;
 }
 
 export { FILE };

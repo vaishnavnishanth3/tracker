@@ -17,12 +17,54 @@ export default function Checklist(): JSX.Element {
     const [year, setYear] = useState<number>(new Date().getFullYear());
 
     useEffect(() => {
-        fetch("/api/investments")
-            .then((r) => r.json())
-            .then(setInvestments);
-        fetch("/api/checklist")
-            .then((r) => r.json())
-            .then(setChecks);
+        (async () => {
+            const invs: any[] = await (await fetch("/api/investments")).json();
+            const existing: any[] = await (
+                await fetch("/api/checklist")
+            ).json();
+            // Auto-mark this month's payments whose debit day has passed.
+            const now = new Date();
+            const m = now.getMonth() + 1;
+            const y = now.getFullYear();
+            const today = now.getDate();
+            for (const inv of invs) {
+                const start = inv.startDate ? new Date(inv.startDate) : null;
+                if (!start || isNaN(start.getTime())) continue;
+                const end = inv.endDate ? new Date(inv.endDate) : null;
+                const selected = new Date(y, m - 1, 1);
+                if (
+                    selected <
+                    new Date(start.getFullYear(), start.getMonth(), 1)
+                )
+                    continue;
+                if (
+                    end &&
+                    !isNaN(end.getTime()) &&
+                    selected > new Date(end.getFullYear(), end.getMonth(), 1)
+                )
+                    continue;
+                const debitDay = Number(inv.debitDay) || start.getDate();
+                if (today < debitDay) continue; // not debited yet this month
+                const already = existing.some(
+                    (c) =>
+                        String(c.investmentId) === String(inv.id) &&
+                        Number(c.month) === m &&
+                        Number(c.year) === y,
+                );
+                if (already) continue;
+                await fetch("/api/checklist", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                        month: m,
+                        year: y,
+                        investmentId: inv.id,
+                    }),
+                });
+            }
+            setInvestments(await (await fetch("/api/investments")).json());
+            setChecks(await (await fetch("/api/checklist")).json());
+        })();
     }, []);
 
     async function toggle(invId: string | number) {
@@ -41,6 +83,21 @@ export default function Checklist(): JSX.Element {
                 Number(c.month) === Number(month) &&
                 Number(c.year) === Number(year),
         );
+    }
+
+    // The selected month/year falls within the investment's start-end period.
+    function withinPeriod(inv: any): boolean {
+        const start = inv.startDate ? new Date(inv.startDate) : null;
+        if (!start || isNaN(start.getTime())) return false;
+        const end = inv.endDate ? new Date(inv.endDate) : null;
+        const selected = new Date(Number(year), Number(month) - 1, 1);
+        const mStart = new Date(start.getFullYear(), start.getMonth(), 1);
+        if (selected < mStart) return false;
+        if (end && !isNaN(end.getTime())) {
+            const mEnd = new Date(end.getFullYear(), end.getMonth(), 1);
+            if (selected > mEnd) return false;
+        }
+        return true;
     }
 
     return (
@@ -82,18 +139,33 @@ export default function Checklist(): JSX.Element {
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {investments.map((inv) => (
-                        <TableRow key={String(inv.id)}>
-                            <TableCell>{inv.name}</TableCell>
-                            <TableCell>{inv.type}</TableCell>
-                            <TableCell>
-                                <Checkbox
-                                    checked={doneFor(inv.id)}
-                                    onChange={() => toggle(inv.id)}
-                                />
+                    {investments
+                        .filter((inv) => withinPeriod(inv))
+                        .map((inv) => (
+                            <TableRow key={String(inv.id)}>
+                                <TableCell>{inv.name}</TableCell>
+                                <TableCell>{inv.type}</TableCell>
+                                <TableCell>
+                                    <Checkbox
+                                        checked={doneFor(inv.id)}
+                                        onChange={() => toggle(inv.id)}
+                                    />
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    {investments.filter((inv) => withinPeriod(inv)).length ===
+                        0 && (
+                        <TableRow>
+                            <TableCell colSpan={3}>
+                                <Typography
+                                    variant='body2'
+                                    color='text.secondary'
+                                >
+                                    No investments are active in {month}/{year}.
+                                </Typography>
                             </TableCell>
                         </TableRow>
-                    ))}
+                    )}
                 </TableBody>
             </Table>
         </Box>

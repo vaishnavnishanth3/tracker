@@ -9,6 +9,62 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import IconButton from "@mui/material/IconButton";
+import Chip from "@mui/material/Chip";
+import type { InvestmentEstimate } from "../lib/investCalc";
+
+const PencilIcon = (): JSX.Element => (
+    <svg
+        width='16'
+        height='16'
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+        aria-hidden='true'
+    >
+        <path d='M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z' />
+    </svg>
+);
+
+const TrashIcon = (): JSX.Element => (
+    <svg
+        width='16'
+        height='16'
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+        aria-hidden='true'
+    >
+        <path d='M3 6h18' />
+        <path d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' />
+        <path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' />
+        <path d='M10 11v6' />
+        <path d='M14 11v6' />
+    </svg>
+);
+
+const CopyIcon = (): JSX.Element => (
+    <svg
+        width='14'
+        height='14'
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+        aria-hidden='true'
+    >
+        <rect x='9' y='9' width='13' height='13' rx='2' />
+        <path d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' />
+    </svg>
+);
 
 type Inv = {
     id: string | number;
@@ -17,7 +73,63 @@ type Inv = {
     startDate?: string;
     endDate?: string;
     amount?: string;
+    currentAmount?: string | number;
+    estimate?: InvestmentEstimate | null;
 };
+
+const fmt = (n: number): string =>
+    n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+
+// Same palette as the calendar so an investment keeps its color everywhere.
+const INV_PALETTE = [
+    "#6366f1",
+    "#22c55e",
+    "#f59e0b",
+    "#ec4899",
+    "#06b6d4",
+    "#a855f7",
+    "#ef4444",
+    "#84cc16",
+    "#14b8a6",
+    "#f97316",
+    "#3b82f6",
+    "#eab308",
+];
+
+function colorFor(id: string | number): string {
+    const s = String(id);
+    let hash = 0;
+    for (let i = 0; i < s.length; i++) {
+        hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+    }
+    return INV_PALETTE[hash % INV_PALETTE.length];
+}
+
+type StatusInfo = {
+    label: "Upcoming" | "In Progress" | "Completed" | "Matured";
+    color: "info" | "warning" | "success";
+};
+
+// Status from the investment's dates relative to today.
+function statusOf(inv: Inv, today = new Date()): StatusInfo {
+    const start = inv.startDate ? new Date(inv.startDate) : null;
+    const end = inv.endDate ? new Date(inv.endDate) : null;
+    if (start && !isNaN(start.getTime()) && today < start) {
+        return { label: "Upcoming", color: "info" };
+    }
+    if (end && !isNaN(end.getTime()) && today > end) {
+        // "Completed" when every scheduled installment was paid, else "Matured".
+        const full =
+            inv.estimate !== null &&
+            inv.estimate !== undefined &&
+            inv.estimate.paidInstallments >= inv.estimate.totalMonths;
+        return {
+            label: full ? "Completed" : "Matured",
+            color: "success",
+        };
+    }
+    return { label: "In Progress", color: "warning" };
+}
 
 export default function Investments(): JSX.Element {
     const [items, setItems] = useState<Inv[]>([]);
@@ -27,7 +139,16 @@ export default function Investments(): JSX.Element {
         startDate: "",
         endDate: "",
         amount: "",
+        compounding: "monthly",
+        interestRate: "",
+        customMaturityAmount: "",
     });
+    const [editingId, setEditingId] = useState<string | number | null>(null);
+    const [editingValue, setEditingValue] = useState("");
+    const [editingCurrentId, setEditingCurrentId] = useState<
+        string | number | null
+    >(null);
+    const [editingCurrentValue, setEditingCurrentValue] = useState("");
 
     useEffect(() => {
         fetch("/api/investments")
@@ -46,6 +167,51 @@ export default function Investments(): JSX.Element {
         setItems(await res.json());
     }
 
+    async function remove(id: string | number) {
+        if (!window.confirm("Delete this investment?")) return;
+        await fetch(`/api/investments?id=${encodeURIComponent(String(id))}`, {
+            method: "DELETE",
+        });
+        const res = await fetch("/api/investments");
+        setItems(await res.json());
+    }
+
+    async function saveCustomMaturity(id: string | number, raw: string) {
+        const value = raw.trim();
+        await fetch("/api/investments", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                id,
+                customMaturityAmount: value === "" ? "" : Number(value),
+            }),
+        });
+        const res = await fetch("/api/investments");
+        setItems(await res.json());
+    }
+
+    async function saveCurrentAmount(id: string | number, raw: string) {
+        const value = raw.trim();
+        await fetch("/api/investments", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                id,
+                currentAmount: value === "" ? "" : Number(value),
+            }),
+        });
+        const res = await fetch("/api/investments");
+        setItems(await res.json());
+    }
+
+    async function copyId(id: string | number) {
+        try {
+            await navigator.clipboard.writeText(String(id));
+        } catch {
+            window.prompt("Copy the ID:", String(id));
+        }
+    }
+
     return (
         <Box>
             <Typography variant='h5' gutterBottom>
@@ -54,7 +220,12 @@ export default function Investments(): JSX.Element {
             <Box
                 component='form'
                 onSubmit={add}
-                sx={{ display: "flex", gap: 2, mb: 3 }}
+                sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                    gap: 2,
+                    mb: 3,
+                }}
             >
                 <TextField
                     required
@@ -100,9 +271,47 @@ export default function Investments(): JSX.Element {
                     }
                     required
                 />
-                <Button type='submit' variant='contained'>
-                    Add
-                </Button>
+                <TextField
+                    select
+                    label='Compounding'
+                    value={form.compounding}
+                    onChange={(e) =>
+                        setForm({ ...form, compounding: e.target.value })
+                    }
+                >
+                    <MenuItem value='monthly'>Monthly</MenuItem>
+                    <MenuItem value='quarterly'>Quarterly</MenuItem>
+                    <MenuItem value='half-yearly'>Half-yearly</MenuItem>
+                    <MenuItem value='annually'>Annually</MenuItem>
+                </TextField>
+                <TextField
+                    type='number'
+                    label='Interest % p.a.'
+                    title='Annual interest rate in percent. Leave empty to use the default (6.5% p.a.).'
+                    inputProps={{ min: 0, step: "any" }}
+                    value={form.interestRate}
+                    onChange={(e) =>
+                        setForm({ ...form, interestRate: e.target.value })
+                    }
+                />
+                <TextField
+                    type='number'
+                    label='Maturity Amount'
+                    title='Fixed maturity amount. Leave empty to use the calculated estimate.'
+                    inputProps={{ min: 0, step: "any" }}
+                    value={form.customMaturityAmount}
+                    onChange={(e) =>
+                        setForm({
+                            ...form,
+                            customMaturityAmount: e.target.value,
+                        })
+                    }
+                />
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                    <Button type='submit' variant='contained' fullWidth>
+                        Add
+                    </Button>
+                </Box>
             </Box>
 
             <Typography variant='h6' gutterBottom>
@@ -111,23 +320,230 @@ export default function Investments(): JSX.Element {
             <Table>
                 <TableHead>
                     <TableRow>
-                        <TableCell>ID</TableCell>
                         <TableCell>Name</TableCell>
                         <TableCell>Type</TableCell>
                         <TableCell>Start</TableCell>
                         <TableCell>End</TableCell>
                         <TableCell>Amount</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Current Amount</TableCell>
+                        <TableCell>Maturity Amount</TableCell>
+                        <TableCell>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {items.map((it) => (
                         <TableRow key={String(it.id)}>
-                            <TableCell>{it.id}</TableCell>
-                            <TableCell>{it.name}</TableCell>
+                            <TableCell>
+                                <span
+                                    style={{
+                                        display: "inline-block",
+                                        width: 10,
+                                        height: 10,
+                                        borderRadius: "50%",
+                                        background: colorFor(it.id),
+                                        marginRight: 8,
+                                    }}
+                                />
+                                {it.name}
+                                <IconButton
+                                    size='small'
+                                    title='Copy ID'
+                                    sx={{ ml: 0.5, p: 0.25 }}
+                                    onClick={() => copyId(it.id)}
+                                >
+                                    <CopyIcon />
+                                </IconButton>
+                            </TableCell>
                             <TableCell>{it.type}</TableCell>
                             <TableCell>{it.startDate}</TableCell>
                             <TableCell>{it.endDate || "-"}</TableCell>
                             <TableCell>{it.amount}</TableCell>
+                            <TableCell>
+                                <Chip
+                                    label={statusOf(it).label}
+                                    color={statusOf(it).color}
+                                    size='small'
+                                    variant='outlined'
+                                />
+                            </TableCell>
+                            <TableCell>
+                                {editingCurrentId === it.id ? (
+                                    <TextField
+                                        size='small'
+                                        type='number'
+                                        autoFocus
+                                        placeholder='Current amount ₹'
+                                        inputProps={{ min: 0, step: "any" }}
+                                        sx={{ width: 150 }}
+                                        value={editingCurrentValue}
+                                        onChange={(e) =>
+                                            setEditingCurrentValue(
+                                                e.target.value,
+                                            )
+                                        }
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                saveCurrentAmount(
+                                                    it.id,
+                                                    editingCurrentValue,
+                                                );
+                                                setEditingCurrentId(null);
+                                            }
+                                            if (e.key === "Escape")
+                                                setEditingCurrentId(null);
+                                        }}
+                                    />
+                                ) : (
+                                    <span
+                                        title={
+                                            it.estimate?.isCustomCurrent
+                                                ? "Manually set. Clear the field and save to return to the calculated value."
+                                                : `Paid: ₹${fmt(it.estimate?.paidToDate ?? 0)} · Interest gained: ₹${fmt(it.estimate?.interestToDate ?? 0)} · ${it.estimate?.paidInstallments ?? 0} installment(s)`
+                                        }
+                                    >
+                                        {it.estimate
+                                            ? `₹${fmt(it.estimate.currentValue)}`
+                                            : "-"}
+                                        {it.estimate?.isCustomCurrent
+                                            ? " *"
+                                            : ""}
+                                    </span>
+                                )}
+                                {editingCurrentId === it.id ? (
+                                    <>
+                                        <Button
+                                            size='small'
+                                            sx={{ ml: 1 }}
+                                            onClick={() => {
+                                                saveCurrentAmount(
+                                                    it.id,
+                                                    editingCurrentValue,
+                                                );
+                                                setEditingCurrentId(null);
+                                            }}
+                                        >
+                                            Save
+                                        </Button>
+                                        <Button
+                                            size='small'
+                                            onClick={() =>
+                                                setEditingCurrentId(null)
+                                            }
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <IconButton
+                                        size='small'
+                                        title='Edit current amount'
+                                        sx={{ ml: 0.5, p: 0.25 }}
+                                        onClick={() => {
+                                            setEditingCurrentId(it.id);
+                                            setEditingCurrentValue(
+                                                it.currentAmount
+                                                    ? String(it.currentAmount)
+                                                    : it.estimate
+                                                      ? String(
+                                                            it.estimate
+                                                                .currentValue,
+                                                        )
+                                                      : "",
+                                            );
+                                        }}
+                                    >
+                                        <PencilIcon />
+                                    </IconButton>
+                                )}
+                            </TableCell>
+                            <TableCell>
+                                {editingId === it.id ? (
+                                    <TextField
+                                        size='small'
+                                        type='number'
+                                        autoFocus
+                                        placeholder='Empty = use estimate'
+                                        inputProps={{ min: 0, step: "any" }}
+                                        sx={{ width: 140 }}
+                                        value={editingValue}
+                                        onChange={(e) =>
+                                            setEditingValue(e.target.value)
+                                        }
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                saveCustomMaturity(
+                                                    it.id,
+                                                    editingValue,
+                                                );
+                                                setEditingId(null);
+                                            }
+                                            if (e.key === "Escape")
+                                                setEditingId(null);
+                                        }}
+                                    />
+                                ) : (
+                                    <span title='The custom amount overrides the estimate when set'>
+                                        {it.estimate?.customMaturityAmount
+                                            ? `₹${fmt(it.estimate.customMaturityAmount)}`
+                                            : "-"}
+                                    </span>
+                                )}
+                                {editingId === it.id ? (
+                                    <>
+                                        <Button
+                                            size='small'
+                                            sx={{ ml: 1 }}
+                                            onClick={() => {
+                                                saveCustomMaturity(
+                                                    it.id,
+                                                    editingValue,
+                                                );
+                                                setEditingId(null);
+                                            }}
+                                        >
+                                            Save
+                                        </Button>
+                                        <Button
+                                            size='small'
+                                            onClick={() => setEditingId(null)}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <IconButton
+                                        size='small'
+                                        title='Edit custom maturity'
+                                        sx={{ ml: 0.5, p: 0.5 }}
+                                        onClick={() => {
+                                            setEditingId(it.id);
+                                            setEditingValue(
+                                                it.estimate
+                                                    ?.customMaturityAmount
+                                                    ? String(
+                                                          it.estimate
+                                                              .customMaturityAmount,
+                                                      )
+                                                    : "",
+                                            );
+                                        }}
+                                    >
+                                        <PencilIcon />
+                                    </IconButton>
+                                )}
+                            </TableCell>
+                            <TableCell>
+                                <IconButton
+                                    size='small'
+                                    color='error'
+                                    title='Delete investment'
+                                    sx={{ p: 0.5 }}
+                                    onClick={() => remove(it.id)}
+                                >
+                                    <TrashIcon />
+                                </IconButton>
+                            </TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

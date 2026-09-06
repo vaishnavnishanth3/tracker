@@ -21,10 +21,11 @@ const clientSideEmotionCache = createEmotionCache();
 const navItems = [
     { label: "Home", href: "/" },
     { label: "Investments", href: "/investments" },
+    { label: "Calendar", href: "/calendar" },
     { label: "Checklist", href: "/checklist" },
     { label: "Expenses", href: "/expenses" },
     { label: "Payslips", href: "/payslips" },
-    { label: "Timeline", href: "/timeline" },
+    { label: "ITR", href: "/itr" },
 ];
 
 interface MyAppProps extends AppProps {
@@ -118,7 +119,7 @@ export default function App({
                         </Toolbar>
                     </AppBar>
 
-                    <Container maxWidth='lg' sx={{ py: 4 }}>
+                    <Container maxWidth='xl' sx={{ py: 4 }}>
                         <Component {...pageProps} />
                     </Container>
                 </Box>
