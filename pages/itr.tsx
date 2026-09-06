@@ -17,8 +17,9 @@ type Row = {
     type?: string;
     rateUsed: number;
     isCustomMaturity: boolean;
-    totalPrincipal: number;
-    maturityAmount: number;
+    openingValue: number;
+    paidInFY: number;
+    closingValue: number;
     interest: number;
     maturesOn: string;
 };
@@ -35,17 +36,29 @@ function currentFYStart(): number {
 export default function Itr(): JSX.Element {
     const [fy, setFy] = useState<number>(currentFYStart());
     const [pkg, setPkg] = useState<string>("");
+    const [pkgSaved, setPkgSaved] = useState(false);
     const [data, setData] = useState<{
         fy: string;
         rows: Row[];
         totalInterest: number;
-        totalPrincipal: number;
-        totalMaturity: number;
+        totalPaid: number;
+        totalClosing: number;
         packageIncome: number;
+        packageSource?: string;
         slabRate: number;
         taxOnInterest: number;
     } | null>(null);
     const [loading, setLoading] = useState(false);
+
+    // Load the saved package once on mount.
+    useEffect(() => {
+        fetch("/api/settings")
+            .then((r) => r.json())
+            .then((s) => {
+                if (s.package) setPkg(String(s.package));
+            })
+            .catch(() => {});
+    }, []);
 
     useEffect(() => {
         setLoading(true);
@@ -57,6 +70,16 @@ export default function Itr(): JSX.Element {
                 setLoading(false);
             });
     }, [fy, pkg]);
+
+    async function savePackage() {
+        await fetch("/api/settings", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ key: "package", value: pkg.trim() }),
+        });
+        setPkgSaved(true);
+        setTimeout(() => setPkgSaved(false), 2500);
+    }
 
     return (
         <Box>
@@ -88,37 +111,47 @@ export default function Itr(): JSX.Element {
                     type='number'
                     size='small'
                     label='Package (annual ₹)'
-                    title='Your total annual income package. Overrides the payslip-derived value and selects the tax slab.'
+                    title='Your total annual income package. Saved and used to select the income-tax slab.'
                     inputProps={{ min: 0, step: "any" }}
                     sx={{ width: 190 }}
                     value={pkg}
                     onChange={(e) => setPkg(e.target.value)}
                 />
+                <Button
+                    variant='contained'
+                    size='small'
+                    onClick={savePackage}
+                    disabled={pkg.trim() === ""}
+                >
+                    Save
+                </Button>
+                {pkgSaved && (
+                    <Typography variant='caption' sx={{ color: "#22c55e" }}>
+                        Saved ✓
+                    </Typography>
+                )}
             </Box>
 
             <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-                Investments maturing (withdrawal) between 1 Apr {fy} and 31 Mar{" "}
-                {fy + 1}.{" "}
-                <b>
-                    Income = Final maturity amount &minus; total principal
-                    deposited
-                </b>
-                , counted in the financial year the investment matures. The
-                principal you deposit is not income; only the interest earned is
-                taxable. Declare under &quot;Income from Other Sources&quot; in
-                your ITR.
+                Interest earned between 1 Apr {fy} and 31 Mar {fy + 1} is
+                income of this financial year &mdash; even if it stays
+                reinvested in the deposit.{" "}
+                <b>Interest = Closing value &minus; Opening value &minus;
+                Deposits made in the FY</b>. Declare under &quot;Income from
+                Other Sources&quot; in your ITR.
             </Typography>
 
             <Table>
                 <TableHead>
                     <TableRow>
                         <TableCell>Investment</TableCell>
-                        <TableCell>Type</TableCell>
-                        <TableCell>Rate p.a.</TableCell>
-                        <TableCell>Matures On</TableCell>
-                        <TableCell align='right'>Total Principal</TableCell>
-                        <TableCell align='right'>Maturity Amount</TableCell>
-                        <TableCell align='right'>Income (Interest)</TableCell>
+                        <TableCell align='right'>Type</TableCell>
+                        <TableCell align='right'>Rate p.a.</TableCell>
+                        <TableCell align='right'>Matures On</TableCell>
+                        <TableCell align='right'>Opening (1 Apr)</TableCell>
+                        <TableCell align='right'>Deposited in FY</TableCell>
+                        <TableCell align='right'>Closing (31 Mar)</TableCell>
+                        <TableCell align='right'>Interest Earned</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -135,14 +168,21 @@ export default function Itr(): JSX.Element {
                                     />
                                 )}
                             </TableCell>
-                            <TableCell>{r.type}</TableCell>
-                            <TableCell>{r.rateUsed.toFixed(2)}%</TableCell>
-                            <TableCell>{r.maturesOn || "-"}</TableCell>
+                            <TableCell align='right'>{r.type}</TableCell>
                             <TableCell align='right'>
-                                ₹{fmt(r.totalPrincipal)}
+                                {r.rateUsed.toFixed(2)}%
                             </TableCell>
                             <TableCell align='right'>
-                                ₹{fmt(r.maturityAmount)}
+                                {r.maturesOn || "-"}
+                            </TableCell>
+                            <TableCell align='right'>
+                                ₹{fmt(r.openingValue)}
+                            </TableCell>
+                            <TableCell align='right'>
+                                ₹{fmt(r.paidInFY)}
+                            </TableCell>
+                            <TableCell align='right'>
+                                ₹{fmt(r.closingValue)}
                             </TableCell>
                             <TableCell
                                 align='right'
@@ -173,9 +213,10 @@ export default function Itr(): JSX.Element {
                                     sx={{
                                         fontWeight: 800,
                                         fontSize: "1.05rem",
+                                        color: "text.secondary",
                                     }}
                                 >
-                                    ₹{fmt(data.totalPrincipal)}
+                                    &mdash;
                                 </TableCell>
                                 <TableCell
                                     align='right'
@@ -184,7 +225,16 @@ export default function Itr(): JSX.Element {
                                         fontSize: "1.05rem",
                                     }}
                                 >
-                                    ₹{fmt(data.totalMaturity)}
+                                    ₹{fmt(data.totalPaid)}
+                                </TableCell>
+                                <TableCell
+                                    align='right'
+                                    sx={{
+                                        fontWeight: 800,
+                                        fontSize: "1.05rem",
+                                    }}
+                                >
+                                    ₹{fmt(data.totalClosing)}
                                 </TableCell>
                                 <TableCell
                                     align='right'
@@ -203,7 +253,7 @@ export default function Itr(): JSX.Element {
                                 }}
                             >
                                 <TableCell
-                                    colSpan={4}
+                                    colSpan={7}
                                     sx={{
                                         fontWeight: 800,
                                         fontSize: "1.05rem",
@@ -217,11 +267,18 @@ export default function Itr(): JSX.Element {
                                         sx={{ ml: 1 }}
                                     >
                                         {(data.slabRate * 100).toFixed(0)}% slab
-                                        (new regime) on ₹
+                                        (new regime, incometax.gov.in) on ₹
                                         {fmt(data.packageIncome)} package
+                                        {data.packageSource === "saved"
+                                            ? " (saved)"
+                                            : data.packageSource === "payslips"
+                                              ? " (from payslips)"
+                                              : data.packageSource ===
+                                                  "estimate"
+                                                ? " (estimated)"
+                                                : ""}
                                     </Typography>
                                 </TableCell>
-                                <TableCell colSpan={2} />
                                 <TableCell
                                     align='right'
                                     sx={{
@@ -237,10 +294,9 @@ export default function Itr(): JSX.Element {
                     )}
                     {data && data.rows.length === 0 && !loading && (
                         <TableRow>
-                            <TableCell colSpan={7}>
+                            <TableCell colSpan={8}>
                                 <Typography color='text.secondary'>
-                                    No investments mature in this financial
-                                    year.
+                                    No interest earned in this financial year.
                                 </Typography>
                             </TableCell>
                         </TableRow>

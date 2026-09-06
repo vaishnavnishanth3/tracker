@@ -43,7 +43,9 @@ export default async function handler(
             );
 
             if (!found) {
-                // Reject toggles outside the investment's start-end period.
+                // Reject toggles outside the payable period: start month
+                // through the month before maturity (the maturity month
+                // itself is the withdrawal month, not a payment month).
                 const investments = await readSheet("investments");
                 const inv = investments.find(
                     (i) => String(i.id) === String(investmentId),
@@ -62,10 +64,10 @@ export default async function handler(
                         !end ||
                         isNaN(end.getTime()) ||
                         selected <=
-                            new Date(end.getFullYear(), end.getMonth(), 1);
+                            new Date(end.getFullYear(), end.getMonth() - 1, 1);
                     if (!afterStart || !beforeEnd) {
                         return res.status(400).json({
-                            error: "Selected month is outside the investment period",
+                            error: "Selected month is outside the payable period (start month to the month before maturity)",
                         });
                     }
                 }

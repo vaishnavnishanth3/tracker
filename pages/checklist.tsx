@@ -40,7 +40,8 @@ export default function Checklist(): JSX.Element {
                 if (
                     end &&
                     !isNaN(end.getTime()) &&
-                    selected > new Date(end.getFullYear(), end.getMonth(), 1)
+                    selected >
+                        new Date(end.getFullYear(), end.getMonth() - 1, 1)
                 )
                     continue;
                 const debitDay = Number(inv.debitDay) || start.getDate();
@@ -85,7 +86,9 @@ export default function Checklist(): JSX.Element {
         );
     }
 
-    // The selected month/year falls within the investment's start-end period.
+    // The selected month/year is a payable month: from the start month
+    // through the month before maturity (the maturity month itself is
+    // the withdrawal month and is not payable).
     function withinPeriod(inv: any): boolean {
         const start = inv.startDate ? new Date(inv.startDate) : null;
         if (!start || isNaN(start.getTime())) return false;
@@ -94,8 +97,9 @@ export default function Checklist(): JSX.Element {
         const mStart = new Date(start.getFullYear(), start.getMonth(), 1);
         if (selected < mStart) return false;
         if (end && !isNaN(end.getTime())) {
-            const mEnd = new Date(end.getFullYear(), end.getMonth(), 1);
-            if (selected > mEnd) return false;
+            const lastPayable = new Date(end.getFullYear(), end.getMonth(), 1);
+            lastPayable.setMonth(lastPayable.getMonth() - 1);
+            if (selected > lastPayable) return false;
         }
         return true;
     }

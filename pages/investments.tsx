@@ -149,6 +149,11 @@ export default function Investments(): JSX.Element {
         string | number | null
     >(null);
     const [editingCurrentValue, setEditingCurrentValue] = useState("");
+    const [editingDate, setEditingDate] = useState<{
+        id: string | number;
+        field: "startDate" | "endDate";
+    } | null>(null);
+    const [editingDateValue, setEditingDateValue] = useState("");
 
     useEffect(() => {
         fetch("/api/investments")
@@ -212,6 +217,26 @@ export default function Investments(): JSX.Element {
         }
     }
 
+    async function saveDate(
+        id: string | number,
+        field: "startDate" | "endDate",
+        value: string,
+    ) {
+        await fetch("/api/investments", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id, [field]: value }),
+        });
+        const res = await fetch("/api/investments");
+        setItems(await res.json());
+    }
+
+    // Sum of the current value of every investment (shown as the last row).
+    const totalCurrent = items.reduce(
+        (sum, it) => sum + (it.estimate?.currentValue ?? 0),
+        0,
+    );
+
     return (
         <Box>
             <Typography variant='h5' gutterBottom>
@@ -255,7 +280,8 @@ export default function Investments(): JSX.Element {
                 />
                 <TextField
                     type='date'
-                    label='End'
+                    label='Maturity Month'
+                    title='Maturity/withdrawal month. The last payable installment is the month before this.'
                     InputLabelProps={{ shrink: true }}
                     value={form.endDate}
                     onChange={(e) =>
@@ -323,7 +349,7 @@ export default function Investments(): JSX.Element {
                         <TableCell>Name</TableCell>
                         <TableCell>Type</TableCell>
                         <TableCell>Start</TableCell>
-                        <TableCell>End</TableCell>
+                        <TableCell>Maturity Month</TableCell>
                         <TableCell>Amount</TableCell>
                         <TableCell>Status</TableCell>
                         <TableCell>Current Amount</TableCell>
@@ -356,8 +382,92 @@ export default function Investments(): JSX.Element {
                                 </IconButton>
                             </TableCell>
                             <TableCell>{it.type}</TableCell>
-                            <TableCell>{it.startDate}</TableCell>
-                            <TableCell>{it.endDate || "-"}</TableCell>
+                            {(["startDate", "endDate"] as const).map(
+                                (field) => (
+                                    <TableCell key={field}>
+                                        {editingDate &&
+                                        editingDate.id === it.id &&
+                                        editingDate.field === field ? (
+                                            <>
+                                                <TextField
+                                                    size='small'
+                                                    type='date'
+                                                    autoFocus
+                                                    InputLabelProps={{
+                                                        shrink: true,
+                                                    }}
+                                                    value={editingDateValue}
+                                                    onChange={(e) =>
+                                                        setEditingDateValue(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter") {
+                                                            saveDate(
+                                                                it.id,
+                                                                field,
+                                                                editingDateValue,
+                                                            );
+                                                            setEditingDate(
+                                                                null,
+                                                            );
+                                                        }
+                                                        if (e.key === "Escape")
+                                                            setEditingDate(
+                                                                null,
+                                                            );
+                                                    }}
+                                                />
+                                                <Button
+                                                    size='small'
+                                                    sx={{ ml: 0.5 }}
+                                                    onClick={() => {
+                                                        saveDate(
+                                                            it.id,
+                                                            field,
+                                                            editingDateValue,
+                                                        );
+                                                        setEditingDate(null);
+                                                    }}
+                                                >
+                                                    Save
+                                                </Button>
+                                                <Button
+                                                    size='small'
+                                                    onClick={() =>
+                                                        setEditingDate(null)
+                                                    }
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                {it[field] || "-"}
+                                                <IconButton
+                                                    size='small'
+                                                    title={`Edit ${field === "startDate" ? "start" : "maturity"} month`}
+                                                    sx={{ ml: 0.5, p: 0.25 }}
+                                                    onClick={() => {
+                                                        setEditingDate({
+                                                            id: it.id,
+                                                            field,
+                                                        });
+                                                        setEditingDateValue(
+                                                            String(
+                                                                it[field] ?? "",
+                                                            ),
+                                                        );
+                                                    }}
+                                                >
+                                                    <PencilIcon />
+                                                </IconButton>
+                                            </>
+                                        )}
+                                    </TableCell>
+                                ),
+                            )}
                             <TableCell>{it.amount}</TableCell>
                             <TableCell>
                                 <Chip
@@ -546,6 +656,25 @@ export default function Investments(): JSX.Element {
                             </TableCell>
                         </TableRow>
                     ))}
+                    {items.length > 0 && (
+                        <TableRow
+                            sx={{
+                                borderTop: "2px solid",
+                                borderColor: "divider",
+                            }}
+                        >
+                            <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
+                                Total
+                            </TableCell>
+                            <TableCell
+                                sx={{ fontWeight: "bold" }}
+                                title='Total money currently across all investments'
+                            >
+                                ₹{fmt(totalCurrent)}
+                            </TableCell>
+                            <TableCell colSpan={2} />
+                        </TableRow>
+                    )}
                 </TableBody>
             </Table>
         </Box>

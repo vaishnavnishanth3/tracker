@@ -18,6 +18,7 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
             "expenses",
             "balances",
             "payslips",
+            "settings",
         ];
         sheetNames.forEach((name) => {
             const sheet = workbook.getWorksheet(name);
@@ -75,6 +76,15 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
                 }));
                 migrated = true;
             }
+        }
+        // Migration: settings sheet for app-level preferences (e.g. package).
+        if (!workbook.getWorksheet("settings")) {
+            const settings = workbook.addWorksheet("settings");
+            settings.columns = [
+                { header: "key", key: "key" },
+                { header: "value", key: "value" },
+            ];
+            migrated = true;
         }
         if (migrated) {
             await workbook.xlsx.writeFile(FILE);
@@ -138,6 +148,12 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
         { header: "net", key: "net" },
         { header: "notes", key: "notes" },
         { header: "expectedIncome", key: "expectedIncome" },
+    ];
+
+    const settings = workbook.addWorksheet("settings");
+    settings.columns = [
+        { header: "key", key: "key" },
+        { header: "value", key: "value" },
     ];
 
     await workbook.xlsx.writeFile(FILE);
