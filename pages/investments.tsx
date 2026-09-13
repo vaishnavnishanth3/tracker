@@ -155,6 +155,10 @@ export default function Investments(): JSX.Element {
     } | null>(null);
     const [editingDateValue, setEditingDateValue] = useState("");
 
+    // SIPs are market-linked: no fixed interest, no compounding frequency,
+    // no fixed maturity — so those inputs only make sense for RD/FD.
+    const isSip = form.type === "SIP";
+
     useEffect(() => {
         fetch("/api/investments")
             .then((r) => r.json())
@@ -231,11 +235,24 @@ export default function Investments(): JSX.Element {
         setItems(await res.json());
     }
 
-    // Sum of the current value of every investment (shown as the last row).
-    const totalCurrent = items.reduce(
-        (sum, it) => sum + (it.estimate?.currentValue ?? 0),
+    // Sum of the current value of every investment (shown as the last row),
+    // plus a per-type (SIP / RD / FD) breakdown. `estimate.currentValue` is
+    // computed as of today and is zero for entries whose start/end range
+    // does not cover today, so the totals reflect money currently invested.
+    const TYPE_ORDER = ["SIP", "RD", "FD"] as const;
+    const currentByType: Record<string, number> = {};
+    for (const it of items) {
+        const t = (it.type || "").toUpperCase();
+        currentByType[t] =
+            (currentByType[t] ?? 0) + (it.estimate?.currentValue ?? 0);
+    }
+    const totalCurrent = Object.values(currentByType).reduce(
+        (sum, v) => sum + v,
         0,
     );
+    const typeBreakdown = TYPE_ORDER.filter((t) => currentByType[t] !== undefined)
+        .map((t) => `${t}: ₹${fmt(currentByType[t])}`)
+        .join(" · ");
 
     return (
         <Box>
@@ -278,61 +295,67 @@ export default function Investments(): JSX.Element {
                     }
                     required
                 />
-                <TextField
-                    type='date'
-                    label='Maturity Month'
-                    title='Maturity/withdrawal month. The last payable installment is the month before this.'
-                    InputLabelProps={{ shrink: true }}
-                    value={form.endDate}
-                    onChange={(e) =>
-                        setForm({ ...form, endDate: e.target.value })
-                    }
-                />
+                {!isSip && (
+                    <TextField
+                        type='date'
+                        label='Maturity Month'
+                        title='Maturity/withdrawal month. The last payable installment is the month before this.'
+                        InputLabelProps={{ shrink: true }}
+                        value={form.endDate}
+                        onChange={(e) =>
+                            setForm({ ...form, endDate: e.target.value })
+                        }
+                    />
+                )}
                 <TextField
                     type='number'
-                    label='Amount'
+                    label={isSip ? "Monthly SIP Amount" : "Amount"}
                     value={form.amount}
                     onChange={(e) =>
                         setForm({ ...form, amount: e.target.value })
                     }
                     required
                 />
-                <TextField
-                    select
-                    label='Compounding'
-                    value={form.compounding}
-                    onChange={(e) =>
-                        setForm({ ...form, compounding: e.target.value })
-                    }
-                >
-                    <MenuItem value='monthly'>Monthly</MenuItem>
-                    <MenuItem value='quarterly'>Quarterly</MenuItem>
-                    <MenuItem value='half-yearly'>Half-yearly</MenuItem>
-                    <MenuItem value='annually'>Annually</MenuItem>
-                </TextField>
-                <TextField
-                    type='number'
-                    label='Interest % p.a.'
-                    title='Annual interest rate in percent. Leave empty to use the default (6.5% p.a.).'
-                    inputProps={{ min: 0, step: "any" }}
-                    value={form.interestRate}
-                    onChange={(e) =>
-                        setForm({ ...form, interestRate: e.target.value })
-                    }
-                />
-                <TextField
-                    type='number'
-                    label='Maturity Amount'
-                    title='Fixed maturity amount. Leave empty to use the calculated estimate.'
-                    inputProps={{ min: 0, step: "any" }}
-                    value={form.customMaturityAmount}
-                    onChange={(e) =>
-                        setForm({
-                            ...form,
-                            customMaturityAmount: e.target.value,
-                        })
-                    }
-                />
+                {!isSip && (
+                    <>
+                        <TextField
+                            select
+                            label='Compounding'
+                            value={form.compounding}
+                            onChange={(e) =>
+                                setForm({ ...form, compounding: e.target.value })
+                            }
+                        >
+                            <MenuItem value='monthly'>Monthly</MenuItem>
+                            <MenuItem value='quarterly'>Quarterly</MenuItem>
+                            <MenuItem value='half-yearly'>Half-yearly</MenuItem>
+                            <MenuItem value='annually'>Annually</MenuItem>
+                        </TextField>
+                        <TextField
+                            type='number'
+                            label='Interest % p.a.'
+                            title='Annual interest rate in percent. Leave empty to use the default (6.5% p.a.).'
+                            inputProps={{ min: 0, step: "any" }}
+                            value={form.interestRate}
+                            onChange={(e) =>
+                                setForm({ ...form, interestRate: e.target.value })
+                            }
+                        />
+                        <TextField
+                            type='number'
+                            label='Maturity Amount'
+                            title='Fixed maturity amount. Leave empty to use the calculated estimate.'
+                            inputProps={{ min: 0, step: "any" }}
+                            value={form.customMaturityAmount}
+                            onChange={(e) =>
+                                setForm({
+                                    ...form,
+                                    customMaturityAmount: e.target.value,
+                                })
+                            }
+                        />
+                    </>
+                )}
                 <Box sx={{ display: "flex", alignItems: "center" }}>
                     <Button type='submit' variant='contained' fullWidth>
                         Add
@@ -385,9 +408,14 @@ export default function Investments(): JSX.Element {
                             {(["startDate", "endDate"] as const).map(
                                 (field) => (
                                     <TableCell key={field}>
-                                        {editingDate &&
-                                        editingDate.id === it.id &&
-                                        editingDate.field === field ? (
+                                        {field === "endDate" &&
+                                        it.type === "SIP" ? (
+                                            <span title='SIPs have no fixed maturity'>
+                                                —
+                                            </span>
+                                        ) : editingDate &&
+                                          editingDate.id === it.id &&
+                                          editingDate.field === field ? (
                                             <>
                                                 <TextField
                                                     size='small'
@@ -507,9 +535,11 @@ export default function Investments(): JSX.Element {
                                 ) : (
                                     <span
                                         title={
-                                            it.estimate?.isCustomCurrent
-                                                ? "Manually set. Clear the field and save to return to the calculated value."
-                                                : `Paid: ₹${fmt(it.estimate?.paidToDate ?? 0)} · Interest gained: ₹${fmt(it.estimate?.interestToDate ?? 0)} · ${it.estimate?.paidInstallments ?? 0} installment(s)`
+                                            it.type === "SIP"
+                                                ? "Market-linked: enter the current value from your fund statement. No interest or maturity can be estimated."
+                                                : it.estimate?.isCustomCurrent
+                                                  ? "Manually set. Clear the field and save to return to the calculated value."
+                                                  : `Paid: ₹${fmt(it.estimate?.paidToDate ?? 0)} · Interest gained: ₹${fmt(it.estimate?.interestToDate ?? 0)} · ${it.estimate?.paidInstallments ?? 0} installment(s)`
                                         }
                                     >
                                         {it.estimate
@@ -568,7 +598,11 @@ export default function Investments(): JSX.Element {
                                 )}
                             </TableCell>
                             <TableCell>
-                                {editingId === it.id ? (
+                                {it.type === "SIP" ? (
+                                    <span title='SIPs are market-linked — no maturity amount can be estimated'>
+                                        —
+                                    </span>
+                                ) : editingId === it.id ? (
                                     <TextField
                                         size='small'
                                         type='number'
@@ -599,7 +633,8 @@ export default function Investments(): JSX.Element {
                                             : "-"}
                                     </span>
                                 )}
-                                {editingId === it.id ? (
+                                {it.type !== "SIP" &&
+                                    (editingId === it.id ? (
                                     <>
                                         <Button
                                             size='small'
@@ -641,7 +676,7 @@ export default function Investments(): JSX.Element {
                                     >
                                         <PencilIcon />
                                     </IconButton>
-                                )}
+                                    ))}
                             </TableCell>
                             <TableCell>
                                 <IconButton
@@ -665,10 +700,20 @@ export default function Investments(): JSX.Element {
                         >
                             <TableCell colSpan={6} sx={{ fontWeight: "bold" }}>
                                 Total
+                                {typeBreakdown && (
+                                    <Typography
+                                        variant='caption'
+                                        component='div'
+                                        sx={{ fontWeight: "normal" }}
+                                        title='Money currently available per investment type (as of today; only entries whose start–end range covers today are counted)'
+                                    >
+                                        {typeBreakdown}
+                                    </Typography>
+                                )}
                             </TableCell>
                             <TableCell
                                 sx={{ fontWeight: "bold" }}
-                                title='Total money currently across all investments'
+                                title='Total money currently across all investments (as of today; only entries whose start–end range covers today are counted)'
                             >
                                 ₹{fmt(totalCurrent)}
                             </TableCell>

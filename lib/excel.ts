@@ -19,6 +19,8 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
             "balances",
             "payslips",
             "settings",
+            "earnings",
+            "epf",
         ];
         sheetNames.forEach((name) => {
             const sheet = workbook.getWorksheet(name);
@@ -83,6 +85,32 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
             settings.columns = [
                 { header: "key", key: "key" },
                 { header: "value", key: "value" },
+            ];
+            migrated = true;
+        }
+        // Migration: earnings sheet for manually entered income (earned) and
+        // income tax paid, keyed by date so summaries can aggregate them.
+        if (!workbook.getWorksheet("earnings")) {
+            const earnings = workbook.addWorksheet("earnings");
+            earnings.columns = [
+                { header: "id", key: "id" },
+                { header: "date", key: "date" },
+                { header: "earned", key: "earned" },
+                { header: "tax", key: "tax" },
+                { header: "notes", key: "notes" },
+            ];
+            migrated = true;
+        }
+        // Migration: epf sheet for Employee Provident Fund monthly details.
+        if (!workbook.getWorksheet("epf")) {
+            const epf = workbook.addWorksheet("epf");
+            epf.columns = [
+                { header: "id", key: "id" },
+                { header: "month", key: "month" },
+                { header: "year", key: "year" },
+                { header: "employee", key: "employee" },
+                { header: "employer", key: "employer" },
+                { header: "notes", key: "notes" },
             ];
             migrated = true;
         }
@@ -154,6 +182,25 @@ export async function ensureWorkbook(): Promise<ExcelJS.Workbook> {
     settings.columns = [
         { header: "key", key: "key" },
         { header: "value", key: "value" },
+    ];
+
+    const earnings = workbook.addWorksheet("earnings");
+    earnings.columns = [
+        { header: "id", key: "id" },
+        { header: "date", key: "date" },
+        { header: "earned", key: "earned" },
+        { header: "tax", key: "tax" },
+        { header: "notes", key: "notes" },
+    ];
+
+    const epf = workbook.addWorksheet("epf");
+    epf.columns = [
+        { header: "id", key: "id" },
+        { header: "month", key: "month" },
+        { header: "year", key: "year" },
+        { header: "employee", key: "employee" },
+        { header: "employer", key: "employer" },
+        { header: "notes", key: "notes" },
     ];
 
     await workbook.xlsx.writeFile(FILE);

@@ -88,6 +88,10 @@ export default async function handler(
     const rows: Row[] = [];
 
     for (const inv of investments) {
+        const type = (inv.type || "").toUpperCase();
+        // SIP gains are market-linked capital gains, not accrued interest,
+        // so they don't belong in this interest-income estimate.
+        if (type === "SIP") continue;
         const amount = Number(inv.amount) || 0;
         const start = parseDate(inv.startDate);
         if (!amount || !start) continue;
@@ -104,7 +108,6 @@ export default async function handler(
         // it stays reinvested in the deposit.
         if (end < fyStart || start >= fyEnd) continue;
 
-        const type = (inv.type || "").toUpperCase();
         const isCustomMaturity =
             Number.isFinite(Number(inv.customMaturityAmount)) &&
             Number(inv.customMaturityAmount) > 0;

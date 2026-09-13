@@ -34,8 +34,9 @@ export type InvestmentEstimate = {
 
 // Expected annual return per investment type.
 // Used when no explicit interest rate is entered for the investment.
+// SIP is intentionally absent: mutual fund returns are market-linked
+// and have no fixed rate.
 export const DEFAULT_ANNUAL_RATES: Record<string, number> = {
-    SIP: 0.065,
     RD: 0.065,
     FD: 0.065,
 };
@@ -84,7 +85,10 @@ export function monthsBetween(start: Date, end: Date): number {
 /**
  * Estimate the maturity ("end") amount of an investment as of `today`.
  *
- * - SIP / RD: `amount` is treated as a monthly installment. The estimate is the
+ * - SIP: market-linked, no fixed rate or maturity. Returns an estimate whose
+ *   current value comes solely from the manually entered current amount; all
+ *   maturity fields are zero.
+ * - RD: `amount` is treated as a monthly installment. The estimate is the
  *   future value at the end date of the installments already paid (grown to the
  *   end date) plus the future value of the remaining scheduled installments.
  * - FD: `amount` is a one-time principal compounding monthly until the end date.
@@ -106,6 +110,39 @@ export function estimateInvestment(
     const start = parseDate(inv.startDate);
     if (!start) return null;
 
+    const type = (inv.type || "").toUpperCase();
+
+    // SIPs are market-linked mutual fund investments: there is no fixed
+    // interest rate, no compounding frequency, and no maturity amount that
+    // can be estimated. The only meaningful number is the current value,
+    // which the user enters manually (e.g. from the fund's NAV statement).
+    if (type === "SIP") {
+        const customCurrent = Number(inv.currentAmount);
+        const hasCurrent =
+            Number.isFinite(customCurrent) && customCurrent > 0;
+        // The money counts only while today is within the investment's
+        // active window: on/after the start date, and on/before the end
+        // date when one is set (no end date = still running).
+        const sipEnd = parseDate(inv.endDate);
+        const inWindow =
+            today >= start && (sipEnd === null || today <= sipEnd);
+        return {
+            calculatedEndAmount: 0,
+            customMaturityAmount: null,
+            estimatedEndAmount: 0,
+            currentValue:
+                inWindow && hasCurrent ? round2(customCurrent) : 0,
+            paidToDate: 0,
+            interestToDate: 0,
+            annualRate: 0,
+            compounding: "none",
+            totalMonths: 0,
+            paidInstallments: Math.max(Math.floor(paidInstallments), 0),
+            isCustomMaturity: false,
+            isCustomCurrent: hasCurrent,
+        };
+    }
+
     let end = parseDate(inv.endDate);
     if (!end) {
         const termYears = Number(inv.termYears);
@@ -116,7 +153,6 @@ export function estimateInvestment(
     }
     if (!end || end <= start) return null;
 
-    const type = (inv.type || "").toUpperCase();
     // A user-entered rate (percent) takes precedence over the type default.
     const customRate = Number(inv.interestRate);
     const rate =
